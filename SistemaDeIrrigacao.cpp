@@ -50,10 +50,7 @@ void saveToEEPROM() {
   EEPROM.write(0, umiThreshold);
   EEPROM.write(1, waterLevelThreshold / 4);  // Dividido por 4 para caber em 1 byte (0-255)
   EEPROM.write(2, tempMax);
-  Serial.println("Configuracoes salvas na EEPROM!");
-  lcd_1.setCursor(0, 1);
-  lcd_1.print("Salvo na EEPROM ");
-  delay(5000);  // Aumentado de 2000 para 5000 (5 segundos)
+  delay(5000);
 }
 
 void loadFromEEPROM() {
@@ -79,6 +76,7 @@ void processSerial() {
         umiThreshold = value;
         Serial.print("Umidade Threshold ajustado: ");
         Serial.println(umiThreshold);
+        Serial.println("Configuracoes salvas na EEPROM!");
       } else {
         Serial.println("Valor invalido para umidade.");
       }
@@ -89,6 +87,7 @@ void processSerial() {
         waterLevelThreshold = value;
         Serial.print("Water Level Threshold ajustado: ");
         Serial.println(waterLevelThreshold);
+        Serial.println("Configuracoes salvas na EEPROM!");
       } else {
         Serial.println("Valor invalido para nivel de agua.");
       }
@@ -99,6 +98,7 @@ void processSerial() {
         tempMax = value;
         Serial.print("Temp Max ajustado: ");
         Serial.println(tempMax);
+        Serial.println("Configuracoes salvas na EEPROM!");
       } else {
         Serial.println("Valor invalido para tempMax. Use entre 10 e 80.");
       }
