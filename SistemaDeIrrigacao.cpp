@@ -7,6 +7,7 @@ LiquidCrystal lcd_1(7, 8, 9, 10, 11, 12);
 // Pin definitions
 const int motorPin = 6;
 const int ledPin = 5;
+const int resetButtonPin = 4;  // Pino para o botão de reset
 
 // Global variables
 int umi = 0;
@@ -41,6 +42,26 @@ int tempReadings[numReadings];
 int waterReadings[numReadings];
 int readingIndex = 0;
 
+// Debounce para o botão
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 50;
+
+void saveToEEPROM() {
+  EEPROM.write(0, umiThreshold);
+  EEPROM.write(1, waterLevelThreshold / 4);  // Dividido por 4 para caber em 1 byte (0-255)
+  EEPROM.write(2, tempMax);
+  Serial.println("Configuracoes salvas na EEPROM!");
+  lcd_1.setCursor(0, 1);
+  lcd_1.print("Salvo na EEPROM ");
+  delay(5000);  // Aumentado de 2000 para 5000 (5 segundos)
+}
+
+void loadFromEEPROM() {
+  umiThreshold = EEPROM.read(0);
+  waterLevelThreshold = EEPROM.read(1) * 4;  // Multiplica por 4 para restaurar
+  tempMax = EEPROM.read(2);
+}
+
 void processSerial() {
   if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n');
@@ -56,7 +77,6 @@ void processSerial() {
       int value = command.substring(7).toInt();
       if (value >= 0 && value <= 100) {
         umiThreshold = value;
-        EEPROM.write(0, umiThreshold);
         Serial.print("Umidade Threshold ajustado: ");
         Serial.println(umiThreshold);
       } else {
@@ -67,7 +87,6 @@ void processSerial() {
       int value = command.substring(8).toInt();
       if (value >= 0 && value <= 1023) {
         waterLevelThreshold = value;
-        EEPROM.write(1, waterLevelThreshold);
         Serial.print("Water Level Threshold ajustado: ");
         Serial.println(waterLevelThreshold);
       } else {
@@ -78,7 +97,6 @@ void processSerial() {
       int value = command.substring(7).toInt();
       if (value >= 10 && value <= 80) {
         tempMax = value;
-        EEPROM.write(2, tempMax);
         Serial.print("Temp Max ajustado: ");
         Serial.println(tempMax);
       } else {
@@ -86,12 +104,17 @@ void processSerial() {
       }
     }
     else if (command == "show") {
+      Serial.println("=== Configuracoes Atuais ===");
       Serial.print("Umidade Threshold: ");
-      Serial.println(umiThreshold);
+      Serial.print(umiThreshold);
+      Serial.println("%");
       Serial.print("Water Level Threshold: ");
-      Serial.println(waterLevelThreshold);
-      Serial.print("Temp Max: ");
-      Serial.println(tempMax);
+      Serial.print(waterLevelThreshold);
+      Serial.println(" (0-1023)");
+      Serial.print("Temperatura Maxima: ");
+      Serial.print(tempMax);
+      Serial.println(" C");
+      Serial.println("==========================");
     }
   }
 }
@@ -103,26 +126,15 @@ void setup() {
   pinMode(A2, INPUT);
   pinMode(motorPin, OUTPUT);
   pinMode(ledPin, OUTPUT);
+  pinMode(resetButtonPin, INPUT_PULLUP);  // Botão com pull-up interno
   digitalWrite(motorPin, LOW);
   digitalWrite(ledPin, LOW);
 
   lcd_1.begin(16, 2);
   Serial.begin(9600);
 
-  // Set default configuration and save to EEPROM
-  umiThreshold = 45;
-  waterLevelThreshold = 200;
-  tempMax = 60;
-  EEPROM.write(0, umiThreshold);
-  EEPROM.write(1, waterLevelThreshold);
-  EEPROM.write(2, tempMax);
-
-  Serial.print("Valores forcados - umiThreshold: ");
-  Serial.println(umiThreshold);
-  Serial.print("Valores forcados - waterLevelThreshold: ");
-  Serial.println(waterLevelThreshold);
-  Serial.print("Valores forcados - tempMax: ");
-  Serial.println(tempMax);
+  // Carrega valores da EEPROM ao iniciar
+  loadFromEEPROM();
 
   // Initialize moving average buffers
   for (int i = 0; i < numReadings; i++) {
@@ -152,6 +164,21 @@ void setup() {
 
 void loop() {
   unsigned long currentMillis = millis();
+
+  // Verifica o botão de reset com debounce
+  int buttonState = digitalRead(resetButtonPin);
+  static int lastButtonState = HIGH;
+  
+  if (buttonState != lastButtonState) {
+    lastDebounceTime = currentMillis;
+  }
+  
+  if ((currentMillis - lastDebounceTime) > debounceDelay) {
+    if (buttonState == LOW) {  // Botão pressionado (LOW por causa do pull-up)
+      saveToEEPROM();
+    }
+  }
+  lastButtonState = buttonState;
 
   // Read sensors and update moving average buffers
   int rawUmi = analogRead(A0);
@@ -232,7 +259,7 @@ void loop() {
     lcd_1.setCursor(0, 1);
     lcd_1.print("Sem Agua      ");
   }
-  else if (temperatura > tempMax) {  // Change condition to use tempMax
+  else if (temperatura > tempMax) {
     lcd_1.setCursor(0, 1);
     lcd_1.print("Temp Alta     ");
   }
